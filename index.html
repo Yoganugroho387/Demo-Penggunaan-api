@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YoGateway Payment</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --success-color: #28a745;
+            --pending-color: #ffc107;
+            --failed-color: #dc3545;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333;
+            --text-light: #6c757d;
+        }
+        
+        /* Reset & Body */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Container Aplikasi (Mobile-First) */
+        .app-container {
+            width: 100%;
+            max-width: 420px; /* Lebar optimal untuk mobile */
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+            overflow: hidden; /* Penting untuk animasi */
+        }
+
+        .app-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+        .app-header img {
+            width: 50px;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        .app-header h1 {
+            display: inline-block;
+            font-size: 22px;
+            color: var(--primary-color);
+        }
+
+        /* Sistem "Screen" (Layar) */
+        .screen {
+            display: none; /* Semua layar disembunyikan by default */
+            padding: 24px;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .screen.active {
+            display: block; /* Layar aktif akan ditampilkan */
+        }
+        
+        /* Animasi Transisi Layar */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Elemen UI */
+        h2 {
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--text-color);
+        }
+        p {
+            color: var(--text-light);
+            text-align: center;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            font-size: 18px;
+            text-align: center;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s, transform 0.1s;
+            position: relative;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button.secondary {
+            background-color: #f0f0f0;
+            color: var(--text-color);
+            margin-top: 10px;
+        }
+        button.secondary:hover {
+            background-color: #e0e0e0;
+        }
+
+        /* Loader di dalam Tombol */
+        .loader {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #FFF;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            margin-top: -9px;
+            opacity: 0;
+        }
+        button.loading .loader {
+            opacity: 1;
+        }
+        button.loading span {
+            opacity: 0.5;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Layar QRIS */
+        #qris-display {
+            text-align: center;
+        }
+        #qris-display img {
+            width: 100%;
+            max-width: 280px;
+            height: auto;
+            border-radius: 10px;
+            border: 1px solid #eee;
+            margin-bottom: 16px;
+        }
+        .nominal-display {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        /* Layar Status */
+        #status-display {
+            text-align: center;
+        }
+        .status-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 20px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            animation: pulse 1.5s infinite;
+        }
+        .status-icon svg {
+            width: 40px;
+            height: 40px;
+            color: white;
+        }
+        .status-icon.success { background-color: var(--success-color); }
+        .status-icon.pending { background-color: var(--pending-color); }
+        .status-icon.failed { background-color: var(--failed-color); }
+        
+        #status-message { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+        #status-trxid { font-size: 14px; color: var(--text-light); }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0,0,0, 0.1); }
+            70% { box-shadow: 0 0 0 15px rgba(0,0,0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0,0,0, 0); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="app-header">
+            <img src="https://yogateway.web.id/assets/img/logo.png" alt="YoGateway Logo">
+            <h1>YoGateway</h1>
+        </div>
+
+        <div id="screen-amount" class="screen active">
+            <h2>Buat Pembayaran</h2>
+            <p>Masukkan jumlah nominal yang ingin Anda bayarkan.</p>
+            <div class="form-group">
+                <label for="amount">Nominal (IDR)</label>
+                <input type="number" id="amount" placeholder="Contoh: 10000" value="1000">
+            </div>
+            <button id="btn-create-payment">
+                <span class="loader"></span>
+                <span>Lanjutkan</span>
+            </button>
+            <div id="error-amount" style="color:var(--failed-color); text-align:center; margin-top:10px;"></div>
+        </div>
+
+        <div id="screen-qris" class="screen">
+            <h2>Scan untuk Membayar</h2>
+            <div id="qris-display">
+                <img id="qris-image" src="" alt="QRIS Code">
+                <p>Total Tagihan:</p>
+                <div class="nominal-display" id="qris-nominal">Rp 0</div>
+                <p id="qris-expired" style="font-size: 14px; color: var(--text-light);"></p>
+            </div>
+            <button id="btn-check-status">
+                <span class="loader"></span>
+                <span>Saya Sudah Bayar</span>
+            </button>
+            <button id="btn-back-to-amount" class="secondary">Kembali</button>
+        </div>
+
+        <div id="screen-status" class="screen">
+            <div id="status-display">
+                <div id="status-icon" class="status-icon">
+                    </div>
+                <h2 id="status-message"></h2>
+                <p id="status-detail"></p>
+                <p id="status-trxid"></p>
+            </div>
+            <button id="btn-new-payment" class="secondary">Buat Pembayaran Baru</button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- KONFIGURASI API ---
+        const API_KEY = "yo_sec_08fbf1c262f6663dec62ef6978707182"; 
+        const BASE_URL = "https://yogateway.web.id/api.php";
+
+        // --- Variabel Global ---
+        let currentTrxId = null;
+
+        // --- Ikon SVG untuk Status ---
+        const icons = {
+            success: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>`,
+            pending: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a8.955 8.955 0 01-1.4 5.207M18.364 5.636a9 9 0 11-12.728 0 9 9 0 0112.728 0z" /></svg>`,
+            failed: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`
+        };
+
+        // --- Selektor Elemen ---
+        const screens = {
+            amount: document.getElementById('screen-amount'),
+            qris: document.getElementById('screen-qris'),
+            status: document.getElementById('screen-status')
+        };
+        const buttons = {
+            create: document.getElementById('btn-create-payment'),
+            check: document.getElementById('btn-check-status'),
+            back: document.getElementById('btn-back-to-amount'),
+            newPayment: document.getElementById('btn-new-payment')
+        };
+
+        // --- FUNGSI UTAMA ---
+
+        // Fungsi untuk navigasi antar layar
+        function showScreen(screenId) {
+            Object.values(screens).forEach(screen => screen.classList.remove('active'));
+            screens[screenId].classList.add('active');
+        }
+
+        // Fungsi untuk mengontrol loader tombol
+        function toggleButtonLoading(button, isLoading) {
+            if (isLoading) {
+                button.classList.add('loading');
+                button.disabled = true;
+            } else {
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        // Fungsi untuk memformat Rupiah
+        function formatRupiah(number) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(number);
+        }
+
+        // 1. Buat Pembayaran
+        async function handleCreatePayment() {
+            toggleButtonLoading(buttons.create, true);
+            document.getElementById('error-amount').innerText = '';
+            const amount = document.getElementById('amount').value;
+
+            if (!amount || amount < 1000) {
+                document.getElementById('error-amount').innerText = 'Minimal nominal adalah Rp 1.000';
+                toggleButtonLoading(buttons.create, false);
+                return;
+            }
+
+            try {
+                const url = `${BASE_URL}?action=createpayment&apikey=${API_KEY}&amount=${amount}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.status === true && data.result) {
+                    const result = data.result;
+                    currentTrxId = result.trxid; // Simpan TRX ID
+
+                    // Isi data ke layar QRIS
+                    document.getElementById('qris-image').src = result.qris_image;
+                    document.getElementById('qris-nominal').innerText = formatRupiah(result.nominal);
+                    document.getElementById('qris-expired').innerText = `Kadaluarsa: ${new Date(result.expired).toLocaleString('id-ID')}`;
+
+                    // Pindah layar
+                    showScreen('qris');
+                } else {
+                    document.getElementById('error-amount').innerText = data.message || 'Gagal membuat QRIS.';
+                }
+            } catch (error) {
+                document.getElementById('error-amount').innerText = 'Gagal terhubung ke server.';
+            } finally {
+                toggleButtonLoading(buttons.create, false);
+            }
+        }
+
+        // 2. Cek Status Pembayaran
+        async function handleCheckStatus() {
+            if (!currentTrxId) return;
+
+            toggleButtonLoading(buttons.check, true);
+            let finalStatus = 'PENDING'; // Default
+            
+            try {
+                const url = `${BASE_URL}?action=checkstatus&apikey=${API_KEY}&trxid=${currentTrxId}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.status === true && data.result) {
+                    finalStatus = data.result.status.toUpperCase();
+                    
+                    // Isi data ke layar status
+                    document.getElementById('status-trxid').innerText = `TRX ID: ${data.result.trxid}`;
+                    document.getElementById('status-detail').innerText = `Total: ${formatRupiah(data.result.amount)}`;
+
+                } else {
+                    finalStatus = 'FAILED'; // Jika cek status gagal
+                    document.getElementById('status-detail').innerText = data.message || 'Gagal cek status.';
+                }
+            } catch (error) {
+                 finalStatus = 'FAILED';
+                 document.getElementById('status-detail').innerText = 'Gagal terhubung ke server.';
+            } finally {
+                // Atur tampilan layar status berdasarkan status akhir
+                const iconDiv = document.getElementById('status-icon');
+                const messageDiv = document.getElementById('status-message');
+
+                switch (finalStatus) {
+                    case 'SUCCESS':
+                        iconDiv.innerHTML = icons.success;
+                        iconDiv.className = 'status-icon success';
+                        messageDiv.innerText = 'Pembayaran Berhasil!';
+                        break;
+                    case 'PENDING':
+                        iconDiv.innerHTML = icons.pending;
+                        iconDiv.className = 'status-icon pending';
+                        messageDiv.innerText = 'Menunggu Pembayaran';
+                        document.getElementById('status-detail').innerText += '\nSilakan selesaikan pembayaran Anda.';
+                        break;
+                    case 'FAILED':
+                    case 'EXPIRED':
+                        iconDiv.innerHTML = icons.failed;
+                        iconDiv.className = 'status-icon failed';
+                        messageDiv.innerText = 'Pembayaran Gagal';
+                        break;
+                }
+                
+                toggleButtonLoading(buttons.check, false);
+                showScreen('status'); // Pindah ke layar status
+            }
+        }
+
+        // --- Event Listeners ---
+        buttons.create.addEventListener('click', handleCreatePayment);
+        buttons.check.addEventListener('click', handleCheckStatus);
+        
+        // Tombol kembali
+        buttons.back.addEventListener('click', () => {
+            showScreen('amount'); // Kembali ke layar awal
+            currentTrxId = null; // Reset TRX ID
+        });
+        buttons.newPayment.addEventListener('click', () => {
+            showScreen('amount'); // Kembali ke layar awal
+            currentTrxId = null; // Reset TRX ID
+        });
+
+    </script>
+</body>
+  </html>
