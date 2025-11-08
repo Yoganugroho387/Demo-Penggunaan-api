@@ -3,37 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YoGateway Demo: QRIS & Cek Status</title>
+    <title>YoGateway QRIS & Status Checker</title>
+    <!-- Load Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f7f6; }
-        .container { max-width: 700px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 20px; }
-        input[type="number"], button { padding: 12px; margin-bottom: 15px; width: 100%; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; }
-        button { background-color: #007bff; color: white; cursor: pointer; border: none; transition: background-color 0.3s; }
-        button:hover { background-color: #0056b3; }
-        #qris-result img { max-width: 250px; height: auto; display: block; margin: 15px auto; border: 1px solid #ddd; padding: 5px; background-color: white; }
-        #qris-info, #status-info { margin-top: 15px; padding: 15px; border: 1px dashed #007bff; border-radius: 4px; background-color: #eaf3ff; }
-        #api-response { background-color: #f8f8f8; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; overflow-x: auto; }
-        #check-status-btn { background-color: #28a745; margin-top: 0; }
-        #check-status-btn:hover { background-color: #1e7e34; }
+        body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>💳 Demo YoGateway: Buat & Cek Pembayaran</h1>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
 
-        <h2>1. Buat QRIS Pembayaran</h2>
-        <label for="nominal">Nominal Pembayaran (min. 100):</label>
-        <input type="number" id="nominal" placeholder="Contoh: 5000" value="1000">
+    <div class="container bg-white shadow-xl rounded-xl w-full max-w-lg p-6 md:p-8 space-y-6">
 
-        <button onclick="createPayment()">Buat QRIS</button>
+        <h1 class="text-3xl font-extrabold text-blue-800 text-center border-b pb-4">
+            💳 YoGateway QRIS Demo (Vercel Ready)
+        </h1>
+        <p class="text-sm text-red-600 font-medium text-center">
+            *Memerlukan file `/api/proxy.js` di Vercel untuk mengatasi CORS.*
+        </p>
 
-        <div id="qris-info">
-            <p><strong>Status:</strong> <span id="payment-status">Menunggu pembuatan QRIS...</span></p>
-            <p><strong>TRX ID:</strong> <span id="current-trxid">N/A</span></p>
+        <!-- Bagian 1: Buat QRIS -->
+        <div class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">1. Buat QRIS Pembayaran</h2>
+            <label for="nominal" class="block text-sm font-medium text-gray-700">Nominal Pembayaran (min. 100)</label>
+            <input type="number" id="nominal" placeholder="Contoh: 5000" value="1000" 
+                   class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 transition duration-150">
+
+            <button onclick="createPayment()" id="create-btn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-md">
+                Buat QRIS
+            </button>
         </div>
 
-        <div id="qris-result">
+        <!-- Informasi Transaksi -->
+        <div id="qris-info" class="p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-inner">
+            <p class="text-sm text-blue-800">
+                <strong>Status:</strong> <span id="payment-status" class="font-medium">Menunggu input nominal...</span>
+            </p>
+            <p class="text-sm text-blue-800">
+                <strong>TRX ID:</strong> <span id="current-trxid" class="font-mono text-xs bg-blue-100 px-2 py-0.5 rounded">N/A</span>
+            </p>
+        </div>
+
+        <!-- Tampilan QRIS -->
+        <div id="qris-result" class="flex flex-col items-center justify-center min-h-[150px]">
+        </div>
+
+        <!-- Bagian 2: Cek Status -->
+        <div class="space-y-4 pt-4 border-t">
+            <h2 class="text-xl font-semibold text-gray-700">2. Cek Status Pembayaran</h2>
+            <button id="check-status-btn" onclick="checkPaymentStatus()" disabled
+                    class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Cek Status Transaksi
+            </button>
+            <div id="status-info" class="p-4 border rounded-lg">
+                <p class="font-semibold text-gray-800">Hasil Cek Status:</p>
+                <div id="status-result" class="mt-1 text-lg font-bold text-gray-500">N/A</div>
+            </div>
+        </div>
+
+        <!-- Log Respon API -->
+        <div class="space-y-2 pt-4 border-t">
+            <h2 class="text-sm font-semibold text-gray-700">Log Respon API Terakhir</h2>
+            <pre id="api-response" class="bg-gray-800 text-green-400 p-3 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">Belum ada respons.</pre>
+        </div>
+
+    </div>
+
+    <script>
+        // --- KONFIGURASI API ---
+        // Kita tidak memanggil BASE_URL langsung. Kita panggil Serverless Function di domain yang sama.
+        const PROXY_ENDPOINT = '/api/proxy'; 
+        const API_KEY = 'demo123'; // API Key tetap dikirim
+        let currentTrxId = null; 
+
+        // --- REFERENSI DOM ---
+        const nominalInput = document.getElementById('nominal');
+        const qrisResultDiv = document.getElementById('qris-result');
+        const statusText = document.getElementById('payment-status');
+        const trxidText = document.getElementById('current-trxid');
+        const checkBtn = document.getElementById('check-status-btn');
+        const statusResultDiv = document.getElementById('status-result');
+        const apiResponsePre = document.getElementById('api-response');
+
+        function displayApiResponse(data) {
+            apiResponsePre.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function createPayment() {
+            const amount = nominalInput.value.trim();
+
+            if (!amount || parseInt(amount) < 100) {
+                alert("Masukkan nominal yang valid (min. 100).");
+                return;
+            }
+            
+            statusText.textContent = 'Sedang memproses via proxy...';
+            qrisResultDiv.innerHTML = '<svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+            checkBtn.disabled = true;
+
+            // Memanggil Serverless Function (proxy) di domain yang sama
+            const url = `${PROXY_ENDPOINT}?action=createpayment&apikey=${API_KEY}&amount=${amount}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                displayApiResponse(data);
+
+                if (data.status === true && data.result) {
+                    const { trxid, nominal, qris_image } = data.result;
+                    
+                    currentTrxId = trxid; 
+                    trxidText.textContent = trxid;
+                    statusText.textContent = `QRIS berhasil dibuat, nominal: Rp${nominal}`;
+                    
+                    qrisResultDiv.innerHTML = `
+                        <p class="text-sm text-center text-gray-600 mb-2">Scan QRIS ini untuk membayar:</p>
+                        <img src="${qris_image}" alt="QRIS Pembayaran" class="rounded-lg shadow-lg w-48 h-48">
+                    `;
+                    
+                    checkBtn.disabled = false;
+                } else {
+                    statusText.textContent = `Gagal membuat QRIS: ${data.result || 'Kesalahan tidak diketahui'}`;
+                    qrisResultDiv.innerHTML = '';
+                    currentTrxId = null;
+                    trxidText.textContent = 'N/A';
+                }
+
+            } catch (error) {
+                console.error("Error creating payment:", error);
+                apiResponsePre.textContent = `Error Koneksi Proxy: ${error.message}. Pastikan file /api/proxy.js sudah di-deploy dengan benar di Vercel.`;
+                statusText.textContent = `Terjadi kesalahan saat memanggil proxy.`;
+                qrisResultDiv.innerHTML = '';
+            }
+        }
+
+        async function checkPaymentStatus() {
+            
+            if (!currentTrxId) {
+                statusResultDiv.innerHTML = '<span class="text-red-500">Harap buat QRIS terlebih dahulu!</span>';
+                return;
+            }
+            
+            statusResultDiv.innerHTML = `<span class="text-blue-500">Mengecek status untuk TRX ID ${currentTrxId} via proxy...</span>`;
+
+            // Memanggil Serverless Function (proxy) di domain yang sama
+            const url = `${PROXY_ENDPOINT}?action=checkstatus&trxid=${currentTrxId}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                displayApiResponse(data);
+
+                if (data.status === true && data.result) {
+                    const paymentStatus = data.result.status;
+                    const amountPaid = data.result.amount;
+                    
+                    let displayStatus = `Status: ${paymentStatus} | Nominal: Rp${amountPaid}`;
+                    
+                    let colorClass = 'text-gray-500';
+                    if (paymentStatus === 'SUCCESS') {
+                        colorClass = 'text-green-600';
+                    } else if (paymentStatus === 'PENDING') {
+                        colorClass = 'text-yellow-600';
+                    } else if (paymentStatus === 'EXPIRED') {
+                        colorClass = 'text-red-600';
+                    }
+
+                    statusResultDiv.innerHTML = `<span class="${colorClass}">${displayStatus}</span>`;
+
+                } else {
+                    statusResultDiv.innerHTML = `<span class="text-red-500">Gagal mendapatkan status: ${data.result || 'Kesalahan tidak diketahui'}</span>`;
+                }
+
+            } catch (error) {
+                console.error("Error checking status:", error);
+                apiResponsePre.textContent = `Error Koneksi Proxy: ${error.message}.`;
+                statusResultDiv.innerHTML = `<span class="text-red-500">Terjadi kesalahan saat memanggil proxy.</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
             </div>
 
         <h2>2. Cek Status Pembayaran</h2>
