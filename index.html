@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YoGateway Demo: QRIS & Cek Status</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 700px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 20px; }
+        input[type="number"], button { padding: 12px; margin-bottom: 15px; width: 100%; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; }
+        button { background-color: #007bff; color: white; cursor: pointer; border: none; transition: background-color 0.3s; }
+        button:hover { background-color: #0056b3; }
+        #qris-result img { max-width: 250px; height: auto; display: block; margin: 15px auto; border: 1px solid #ddd; padding: 5px; background-color: white; }
+        #qris-info, #status-info { margin-top: 15px; padding: 15px; border: 1px dashed #007bff; border-radius: 4px; background-color: #eaf3ff; }
+        #api-response { background-color: #f8f8f8; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; overflow-x: auto; }
+        #check-status-btn { background-color: #28a745; margin-top: 0; }
+        #check-status-btn:hover { background-color: #1e7e34; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💳 Demo YoGateway: Buat & Cek Pembayaran</h1>
+
+        <h2>1. Buat QRIS Pembayaran</h2>
+        <label for="nominal">Nominal Pembayaran (min. 100):</label>
+        <input type="number" id="nominal" placeholder="Contoh: 5000" value="1000">
+
+        <button onclick="createPayment()">Buat QRIS</button>
+
+        <div id="qris-info">
+            <p><strong>Status:</strong> <span id="payment-status">Menunggu pembuatan QRIS...</span></p>
+            <p><strong>TRX ID:</strong> <span id="current-trxid">N/A</span></p>
+        </div>
+
+        <div id="qris-result">
+            </div>
+
+        <h2>2. Cek Status Pembayaran</h2>
+        <p>Gunakan tombol di bawah untuk mengecek status transaksi QRIS yang baru dibuat.</p>
+        <button id="check-status-btn" onclick="checkPaymentStatus()" disabled>Cek Status Transaksi</button>
+
+        <div id="status-info">
+            <p><strong>Hasil Cek Status:</strong> <span id="status-result">N/A</span></p>
+        </div>
+
+        <h2>Log Respon API Terakhir</h2>
+        <div id="api-response">
+            Belum ada respons.
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURASI ---
+        const API_KEY = 'demo123'; 
+        const BASE_URL = 'https://yogateway.yotemp.web.id/api.php';
+        let currentTrxId = null; // Variabel global untuk menyimpan ID Transaksi
+
+        /**
+         * Fungsi untuk memanggil endpoint "Create Payment" dan membuat QRIS.
+         */
+        async function createPayment() {
+            const amount = document.getElementById('nominal').value.trim();
+            const qrisResultDiv = document.getElementById('qris-result');
+            const statusText = document.getElementById('payment-status');
+            const trxidText = document.getElementById('current-trxid');
+            const checkBtn = document.getElementById('check-status-btn');
+
+            if (!amount || parseInt(amount) < 100) {
+                alert("Masukkan nominal yang valid (min. 100).");
+                return;
+            }
+            
+            // Tampilan loading
+            statusText.textContent = 'Sedang memproses...';
+            qrisResultDiv.innerHTML = '<p>Membuat QRIS, mohon tunggu...</p>';
+            checkBtn.disabled = true;
+
+            const url = `${BASE_URL}?action=createpayment&apikey=${API_KEY}&amount=${amount}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                document.getElementById('api-response').textContent = JSON.stringify(data, null, 2);
+
+                if (data.status === true && data.result) {
+                    const { trxid, nominal, qris_image } = data.result;
+                    
+                    // Simpan TRX ID ke variabel global
+                    currentTrxId = trxid; 
+
+                    // Update UI dengan info transaksi
+                    trxidText.textContent = trxid;
+                    statusText.textContent = 'QRIS berhasil dibuat, nominal: Rp' + nominal;
+                    
+                    // Tampilkan gambar QRIS
+                    qrisResultDiv.innerHTML = `<img src="${qris_image}" alt="QRIS Pembayaran">`;
+                    
+                    // Aktifkan tombol cek status
+                    checkBtn.disabled = false;
+                } else {
+                    // Penanganan error saat pembuatan QRIS
+                    statusText.textContent = `Gagal membuat QRIS: ${data.result || 'Kesalahan tidak diketahui'}`;
+                    qrisResultDiv.innerHTML = '';
+                    currentTrxId = null;
+                    trxidText.textContent = 'N/A';
+                }
+
+            } catch (error) {
+                console.error("Error creating payment:", error);
+                document.getElementById('api-response').textContent = `Error: ${error.message}`;
+                statusText.textContent = `Terjadi kesalahan koneksi/server.`;
+                qrisResultDiv.innerHTML = '';
+            }
+        }
+
+        /**
+         * Fungsi untuk memanggil endpoint "Check Status".
+         */
+        async function checkPaymentStatus() {
+            const statusResultText = document.getElementById('status-result');
+            
+            if (!currentTrxId) {
+                statusResultText.textContent = 'Harap buat QRIS terlebih dahulu!';
+                return;
+            }
+            
+            // Tampilan loading
+            statusResultText.textContent = `Mengecek status untuk TRX ID ${currentTrxId}...`;
+
+            // Endpoint Check Status
+            const url = `${BASE_URL}?action=checkstatus&trxid=${currentTrxId}`;
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                document.getElementById('api-response').textContent = JSON.stringify(data, null, 2);
+
+                if (data.status === true && data.result) {
+                    const paymentStatus = data.result.status; // Contoh: PENDING, SUCCESS, EXPIRED
+                    const amountPaid = data.result.amount;
+                    
+                    let displayStatus = `Status: **${paymentStatus}** | Nominal: Rp${amountPaid}`;
+                    
+                    // Beri warna status
+                    if (paymentStatus === 'SUCCESS') {
+                        displayStatus = `<span style="color: green;">${displayStatus}</span>`;
+                    } else if (paymentStatus === 'PENDING') {
+                        displayStatus = `<span style="color: orange;">${displayStatus}</span>`;
+                    } else {
+                        displayStatus = `<span style="color: red;">${displayStatus}</span>`;
+                    }
+
+                    statusResultText.innerHTML = displayStatus;
+                } else {
+                    statusResultText.textContent = `Gagal mendapatkan status: ${data.result || 'Kesalahan tidak diketahui'}`;
+                }
+
+            } catch (error) {
+                console.error("Error checking status:", error);
+                document.getElementById('api-response').textContent = `Error: ${error.message}`;
+                statusResultText.textContent = `Terjadi kesalahan koneksi/server saat cek status.`;
+            }
+        }
+    </script>
+</body>
+  </html>
+  
